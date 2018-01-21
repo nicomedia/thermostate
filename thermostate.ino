@@ -1,189 +1,213 @@
 #include <OneWire.h> // Required for ds18b20 temparature sensor 
+#include <DS3231.h>
+#include <LCD5110_Basic.h>
+#include <RCSwitch.h>
 
-#define TEMPERATURE_PIN   10
-#define RELAY_PIN          5
-#define POTENTIOMETER_PIN  2
-#define GREEN_LED_PIN     13
-#define RED_LED_PIN       12
-#define YELLOW_LED_PIN    53
-#define STATUS_LED_PIN    52
-#define BUTTON_PIN        3
+RCSwitch mySwitch = RCSwitch();
 
-#define SENSOR_READ         1
-#define POTENTIOMETER_READ   2
+LCD5110 myGLCD(8,9,10,11,12);
+extern uint8_t SmallFont[];
+extern uint8_t MediumNumbers[];
+extern uint8_t BigNumbers[];
 
-#define TEMP_ERR          -255
-
+// Pin Configuration 
+#define TEMPERATURE_PIN   4
+#define RELAY_PIN         5
+#define BUTTON_PIN        7
+// Initial desired temperature
 #define DESIRED_TEMP      22
+// Error Code
+#define TEMP_ERR          -255
+// Working modes
+#define TEMPERATURE_MODE  1
+#define KOMBI_MODE        2
+#define BUTTON_MODE       3
+// Difference should be 1 celcius.
+#define TEMP_INTERVAL     1
 
 OneWire  ds(TEMPERATURE_PIN);  // Normally 4.7k resistor is neccessary but i am using ready to use sensor card.
+DS3231  rtc(SDA, SCL);
 
-float desired_temperature = DESIRED_TEMP;
-int button_val = HIGH;
-int read_mode = SENSOR_READ;
+// Global Variables
+int working_mode = TEMPERATURE_MODE;
+int desired_temperature = DESIRED_TEMP;
+int temperature_val = DESIRED_TEMP;
+const int GasSensorIn = A0;
+int  button_state = LOW;  
+char *controller;
 
+const unsigned char temperatureIcon [] PROGMEM = {
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0x01,
+0x01, 0x01, 0x01, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0xFF, 0x00, 0xF8, 0xF8, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0xF0, 0xF8, 0x0C, 0xC6, 0xE3, 0xF0, 0xFF, 0xFF, 0xF0, 0xE3, 0xC6, 0x0C, 0xF8, 0xF0,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x0F, 0x18, 0x31, 0x23, 0x67, 0x67, 0x67, 0x67, 0x23,
+0x31, 0x18, 0x0F, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+};
+
+// the setup function runs once when you press reset or power the board
 void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(RELAY_PIN, OUTPUT);
-  pinMode(GREEN_LED_PIN, OUTPUT);   // declare the ledPin as an OUTPUT
-  pinMode(RED_LED_PIN, OUTPUT);     // declare the ledPin as an OUTPUT
-  pinMode(YELLOW_LED_PIN, OUTPUT);  // declare the ledPin as an OUTPUT
-  pinMode(STATUS_LED_PIN, OUTPUT);  // declare the ledPin as an OUTPUT
-  delay(250);
-  blink_led();  
-  pinMode(BUTTON_PIN,INPUT_PULLUP);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // Temporary debug
+  pinMode(13, OUTPUT);
 
-  digitalWrite(RELAY_PIN, HIGH);
+  rtc.begin();
+  myGLCD.InitLCD();
+  // The following lines can be uncommented to set the date and time
+  //rtc.setDOW(SATURDAY);     // Set Day-of-Week to SUNDAY
+  //rtc.setTime(12, 42, 0);     // Set the time to 12:00:00 (24hr format)
+  //rtc.setDate(4, 11, 2017);   // Set the date to January 1st, 2014
+
+// Transmitter is connected to Arduino Pin #10  
+//  mySwitch.enableTransmit(12);
 }
 
+// the loop function runs over and over again forever
 void loop() {
-  // put your main code here, to run repeatedly:
-  float temperature_val = desired_temperature;
+/*  digitalWrite(13,HIGH);
+  //mySwitch.send("10000100011000000000010100");
+  mySwitch.send("111111111111111");
+  delay(2000); 
+  digitalWrite(13,LOW);
+  delay(2000);
+  mySwitch.send("1000000");
+   return;
+*/
 
-  button_val = digitalRead(BUTTON_PIN);
+   // read the state of the pushbutton value:
+   int tmp_button_state = digitalRead(BUTTON_PIN);
 
-  Serial.print(" Button val :");
-  Serial.print(button_val);
-  Serial.println();
+   if ( tmp_button_state != button_state )
+   {
+        // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+        if (tmp_button_state == HIGH) {
+          stop_heater();
+        } 
+        else {
+          start_heater();
+       }
+       button_state = tmp_button_state;
+       working_mode = BUTTON_MODE;
+       delay(1000);
 
-  if ( button_val == LOW )
+       return;
+   }
+
+  // Gas Sensor Send
   {
-    if ( read_mode == SENSOR_READ )
-    {
-      read_mode = POTENTIOMETER_READ;
-    }
-    else
-    {
-      read_mode = SENSOR_READ;
-    }
+    int gas_sensor = analogRead(GasSensorIn);        
+   
+    Serial.println('G');                       
+    Serial.println(gas_sensor); 
+  }  
+  
+  // Read temperature sensor
+  temperature_val = Read_Temperature_Celsius();
+  // Sometimes sensor returns error, Do Nothing
+  if ( temperature_val == TEMP_ERR )
+  {
+      return;
   }
   
-  Serial.print(" read_mode :");
-  Serial.print(read_mode);
-  Serial.println();
+  myGLCD.drawBitmap(0, 0, temperatureIcon, 84, 48); 
+  myGLCD.setFont(BigNumbers);
+  myGLCD.printNumI(temperature_val, RIGHT, 24);
 
-  if ( read_mode == SENSOR_READ )
+  // Kombi On/Off is not triggered from mobile app
+  if ( working_mode == TEMPERATURE_MODE )
   {
-      digitalWrite(STATUS_LED_PIN, HIGH);
-      temperature_val = Read_Temperature_Celsius();
+        Serial.println("temperature mode");
+        if ( (temperature_val <= (desired_temperature - TEMP_INTERVAL)))
+        {
+            start_heater();
+        }
+        else if ( (temperature_val >= (desired_temperature + TEMP_INTERVAL)))
+        {
+            stop_heater();
+        }
+        else
+        {
+            // DO nothing!!! Keep last state.
+        }
+  }
 
-      Serial.print(" Temperature val :");
-      Serial.print(temperature_val);
-      Serial.println();
-    
-      if ( temperature_val == TEMP_ERR )
+  // Send temperature value to the mobile app
+  Serial.println('T');
+  Serial.println(temperature_val);
+
+  // Read serial data that is sent by mobile app
+  if(Serial.available() > 0)
+  {
+    char cmd = Serial.read();
+
+    // Kombi  ON/OFF
+    if(cmd == 'K')
+    {
+      int state = Serial.parseInt();
+      if(state == 1)
       {
-          //error_cond();
-          return;
-      }
-    
-      if ( (temperature_val < (desired_temperature - 2)))
-      {
-          start_heater();
-      }
-      else if ( (temperature_val > (desired_temperature + 2)))
-      {
-          stop_heater();
+        start_heater();
+        digitalWrite(13,1);
       }
       else
       {
-        // DO nothing!!! Keep last state.
+        digitalWrite(13,0);
+        stop_heater();
       }
-  }
-  else if ( read_mode == POTENTIOMETER_READ )
-  {
-    digitalWrite(STATUS_LED_PIN, LOW);
-    int potentiomter_val = analogRead(POTENTIOMETER_PIN);    // read the value from the sensor
-    Serial.print(" Potantiometer val :");
-    Serial.print(potentiomter_val);
-    Serial.println();
-  
-    if(potentiomter_val > 500)
-    {
-      start_heater();
+
+      working_mode = KOMBI_MODE;
     }
-    else
+    // Desired temperature
+    else if(cmd == 'D')
     {
-      stop_heater();
+      desired_temperature = Serial.parseInt();
+      
+      working_mode = TEMPERATURE_MODE;
     }
-  }  
-
-  delay(5000);
-}
-
-void mode_change(int new_mode)
-{
-  if ( new_mode == SENSOR_READ )
-  {
-    digitalWrite(GREEN_LED_PIN, HIGH);
-    delay(250);
-    digitalWrite(RED_LED_PIN, LOW);
-    delay(250);
-    digitalWrite(YELLOW_LED_PIN, HIGH);
-    delay(3000);
   }
-  else 
-  {
-    digitalWrite(GREEN_LED_PIN, LOW);
-    delay(250);
-    digitalWrite(RED_LED_PIN, HIGH);
-    delay(250);
-    digitalWrite(YELLOW_LED_PIN, HIGH);
-    delay(3000);
-  }
-}
 
-void blink_led()
-{
-  digitalWrite(GREEN_LED_PIN, HIGH);
-  delay(250);
-  digitalWrite(RED_LED_PIN, HIGH);
-  delay(250);
-  digitalWrite(YELLOW_LED_PIN, HIGH);
-  delay(250);
-  digitalWrite(STATUS_LED_PIN, HIGH);
-  delay(2000);
-  digitalWrite(GREEN_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(RED_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(YELLOW_LED_PIN, LOW);
-  delay(250);  
-  digitalWrite(STATUS_LED_PIN, LOW);
-}
-
-void error_cond()
-{
-  digitalWrite(GREEN_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(RED_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(YELLOW_LED_PIN, HIGH);
-  delay(250);
+  delay(1000);
 }
 
 void stop_heater()
 {
+  Serial.println('Y');
   digitalWrite(RELAY_PIN, HIGH);
-  delay(250);
-  digitalWrite(GREEN_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(RED_LED_PIN, HIGH);
-  delay(250);
-  digitalWrite(YELLOW_LED_PIN, LOW);
   delay(250);
 }
 
 void start_heater()
 {
+  Serial.println('X');
   digitalWrite(RELAY_PIN, LOW);
-  delay(250);
-  digitalWrite(GREEN_LED_PIN, HIGH);
-  delay(250);
-  digitalWrite(RED_LED_PIN, LOW);
-  delay(250);
-  digitalWrite(YELLOW_LED_PIN, LOW);
   delay(250);
 }
 
@@ -197,21 +221,21 @@ float Read_Temperature_Celsius()
   float celsius, fahrenheit;
 
   if ( !ds.search(addr)) {
-    Serial.println("No more addresses.");
-    Serial.println();
+//    Serial.println("No more addresses.");
+ //   Serial.println();
     ds.reset_search();
     delay(250);
     return TEMP_ERR;
   }
   
-  Serial.print("ROM =");
+//  Serial.print("ROM =");
   for( index = 0; index < 8; index++) {
-    Serial.write(' ');
-    Serial.print(addr[index], HEX);
+//    Serial.write(' ');
+//    Serial.print(addr[index], HEX);
   }
 
   if (OneWire::crc8(addr, 7) != addr[7]) {
-      Serial.println("CRC is not valid!");
+//      Serial.println("CRC is not valid!");
       return TEMP_ERR;
   }
   Serial.println();
@@ -219,19 +243,19 @@ float Read_Temperature_Celsius()
 // the first ROM byte indicates which chip
   switch (addr[0]) {
     case 0x10:
-      Serial.println("  Chip = DS18S20");  // or old DS1820
+ //     Serial.println("  Chip = DS18S20");  // or old DS1820
       type_s = 1;
       break;
     case 0x28:
-      Serial.println("  Chip = DS18B20");
+ //     Serial.println("  Chip = DS18B20");
       type_s = 0;
       break;
     case 0x22:
-      Serial.println("  Chip = DS1822");
+ //     Serial.println("  Chip = DS1822");
       type_s = 0;
       break;
     default:
-      Serial.println("Device is not a DS18x20 family device.");
+//      Serial.println("Device is not a DS18x20 family device.");
       return TEMP_ERR;
   } 
 
@@ -246,17 +270,17 @@ float Read_Temperature_Celsius()
   ds.select(addr);    
   ds.write(0xBE);         // Read Scratchpad
 
-  Serial.print("  Data = ");
-  Serial.print(present, HEX);
-  Serial.print(" ");
+//  Serial.print("  Data = ");
+//  Serial.print(present, HEX);
+//  Serial.print(" ");
   for ( index = 0; index < 9; index++) {           // we need 9 bytes
     data[index] = ds.read();
-    Serial.print(data[index], HEX);
-    Serial.print(" ");
+//    Serial.print(data[index], HEX);
+//    Serial.print(" ");
   }
-  Serial.print(" CRC=");
-  Serial.print(OneWire::crc8(data, 8), HEX);
-  Serial.println();
+//  Serial.print(" CRC=");
+//  Serial.print(OneWire::crc8(data, 8), HEX);
+//  Serial.println();
 
   // Convert the data to actual temperature
   // because the result is a 16 bit signed integer, it should
@@ -279,11 +303,11 @@ float Read_Temperature_Celsius()
   }
   celsius = (float)raw / 16.0;
   fahrenheit = celsius * 1.8 + 32.0;
-  Serial.print("  Temperature = ");
+/*  Serial.print("  Temperature = ");
   Serial.print(celsius);
   Serial.print(" Celsius, ");
   Serial.print(fahrenheit);
-  Serial.println(" Fahrenheit");
+  Serial.println(" Fahrenheit");*/
 
   return celsius;
 }
