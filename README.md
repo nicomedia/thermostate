@@ -27,6 +27,11 @@ Button:
 
 Ordinary button to open/close manually. ( In case there is no connection)
 
+LCD screen : 
+
+It shows the current temperature value.
+https://www.robotistan.com/nokia-5110-screen-84x48-graphic-lcd
+
 BLYNK:
 
 I am using blynk as a MQTT server. It has nice free mobile app as well.
