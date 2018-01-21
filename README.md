@@ -5,6 +5,8 @@ Arduino wifi + esp8266 wifi card :
 
 https://tr.aliexpress.com/item/UNO-WiFi-R3-ATmega328P-ESP8266-32Mb-memory-USB-TTL-CH340G-Compatible-for-Arduino-Uno-NodeMCU-WeMos/32806748844.html?spm=a2g0s.9042311.0.0.CdPxYm
 
+Card actually includes two different card (arduino uno + esp8266). You have to change the switches of the card in order to change the code inside the card. Cards are communicated with each other through serial port. I implemented custom commands to handle communication between cards.
+
 Temperature sensor : ds18b20
 
 I used resistor included temperature card.
