@@ -12,8 +12,6 @@ char auth[] = "9f7e0f63ae7949ecaa68fa328bf91b62";
 // Set password to "" for open networks.
 char ssid[] = NETWORK_SSID;
 char pass[] = NETWORK_PASSW;
-//char ssid[] = "mirAKS_home";
-//char pass[] = "5334319900Ay";
 
 // Initial desired temperature
 int desired_temperature = 22;
