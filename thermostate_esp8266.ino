@@ -10,8 +10,8 @@ char auth[] = "9f7e0f63ae7949ecaa68fa328bf91b62";
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "Connectify-thermo";
-char pass[] = "Bjk1903*";
+char ssid[] = NETWORK_SSID;
+char pass[] = NETWORK_PASSW;
 //char ssid[] = "mirAKS_home";
 //char pass[] = "5334319900Ay";
 
